@@ -1,0 +1,82 @@
+Fbs - Framebuffer Boot Splash toolkit
+================================================================================
+
+
+Fbs is a rewrite of the old SliTaz Fbsplash tool for the SliTaz ARM and
+Raspberry Pi flavor. SliTaz ARM use radically simple boot scripts so
+the integration was very easy. Enabling/disabling fbsplash on boot and
+managing themes can be done with the fbs utility.
+
+In time or if someone give a hand on. It may be possible to have a
+GTK or/and Ncurses frontend to handle themes.
+
+
+Overview
+--------
+
+ * Use Busybox fbsplash applet for image and progress bar
+ * Use Linux kernel options 'quiet' at boot time
+ * Enable FBSPLASH in /etc/rcS.conf confg file
+ * Tweak /etc/inittab to hide and log text messages
+ * The SliTaz theme can fit in very small screen since the image
+   goes top/left and have a black bg such as the Linux Framebuffer
+
+
+Install & setup
+---------------
+Fbs is packaged for SliTaz but should work on any GNU/Linux with some
+modifications to the boot scripts, patches are welcome! To install the
+fbs utility and default theme: 
+
+# make && make install
+
+Boot splash is activated on some SliTaz ARM flavor but not on the i486
+standard distibution so you need enable fbs to have a graphical boot:
+
+# fbs on [theme]
+
+All fbs configuration variable can be found in: /etc/rcS.conf. Thes are:
+
+FBSPLASH="on"
+FBTHEME="slitaz"
+
+Testing
+-------
+Let test the environment, first make sure you have the Linux Framebuffer
+device node with: 'ls /dev/fb0'. The Raspberry Pi use the Linux framebuffer
+so Fbs will work out of the box.
+
+Then press Ctrl+F2 to open a text mode session (back to X with Ctrl+F7)
+and run as root the Fbs testsuite:
+
+# fbs test
+
+Theming
+-------
+Fbs provide a nifty theming mechanism designed to easily handle installed
+themes as well has creating and sharing new themes. A theme consist in
+a small and human readable configuration and in a gzip ppm image.
+
+# fbs themes
+# fbs set-theme [theme]
+# fbs pack-theme [theme]
+# fbs add-theme [theme]
+
+Code example
+------------
+#!/bin/sh
+#
+export fifo=/tmp/fbs.fifo
+fbsplash -c -f ${fifo}
+	-s /usr/share/fbs/default/fbsplash.ppm \
+	-i /usrshare/fbs/default/fbsplash.cfg &
+ 
+echo 25 > ${fifo}
+sleep 1
+echo 50 > ${fifo}
+sleep 1
+echo 75 > ${fifo}
+sleep 1
+echo "exit" > ${fifo}
+ 
+===============================================================================
