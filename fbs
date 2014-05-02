@@ -1,0 +1,152 @@
+#!/bin/sh
+#
+# Fbs - Graphical framebuffer boot using Busybox fbsplash applet. No use of SliTaz
+# specific code since it may be used by other distro or emb system.
+#
+# (C) 2014 Christophe Lincoln - BSD License.
+#
+
+sysconf="/etc/fbs.conf"
+themes="/usr/share/fbs"
+fifo="/fbs.fifo"
+
+[ -f "${sysconf}" ] && . ${sysconf}
+[ -f "fbs.conf" ] && . fbs.conf
+[ "$2" ] && FBTHEME="$2"
+
+# Functions
+
+boldify() { 
+	echo -e "\033[1m$@\033[0m"
+}
+
+usage() {
+	cat << EOT
+
+Framebuffer Boot Splash utility
+
+$(boldify "Usage:") $(basename $0) [command] [theme]
+
+$(boldify "Commands:")
+  on            Enable graphical boot
+  off           Disable graphical boot
+  test          Test a splash theme
+  themes        List all installed themes
+  set-theme     Change current theme
+  pack-theme    Pack a system theme
+  add-theme     Install a fbs-theme archive
+
+EOT
+}
+
+check_root() {
+	if [ $(id -u) != "0" ]; then
+		echo "Only root adiministrator can run fbs $1" && exit 1
+	fi
+}
+
+separator() {
+	echo "--------------------------------------"
+}
+
+set_theme() {
+	sed -i s'~FBTHEME=.*~FBTHEME=\"$new_theme\"~' /etc/fbs.conf
+}
+
+start_fbsplash() {
+	[ -x "$themes/$FBTHEME/init.sh" ] && \
+		${themes}/${FBTHEME}/init.sh
+	mkfifo ${fifo}
+	fbsplash -c -f ${fifo} \
+		-s $themes/$FBTHEME/splash.ppm.gz \
+		-i $themes/$FBTHEME/splash.cfg &
+}
+
+# Commands
+
+case "$1" in
+
+	on)
+		# Enable graphical boot
+		check_root
+		echo "Enabling SliTaz graphical boot..."
+		if ! grep -q "rcS > /dev/null 2>/dev/null" /etc/inittab; then		
+			sed -i s'#rcS#rcS >/dev/null 2>/dev/null#' /etc/inittab
+		fi
+		sed -i s'/FBSPLASH=.*/FBSPLASH="on"/' /etc/fbs.conf ;;
+		
+	off)
+		# Disable graphical boot
+		check_root
+		echo "Disabling SliTaz graphical boot..."
+		sed -i s'#rcS >/dev/null 2>/dev/null#rcS#' /etc/inittab
+		sed -i s'/FBSPLASH=.*/FBSPLASH="off"/' /etc/fbs.conf ;;
+	
+	'test')
+		# Testsuite for fbs 
+		reset && start_fbsplash
+		for p in 0 10 20 30 40 50 60 70 80 90 100
+		do
+			echo "$p" > ${fifo} && sleep 1
+		done #> /dev/null
+		echo "exit" > ${fifo}
+		clear && rm -f ${fifo};;
+	
+	themes)
+		# List all themes
+		echo ""
+		boldify "Fbs themes list"
+		separator
+		cd ${themes}
+		ls -1 && echo "" ;;
+		
+	set-theme)
+		check_root
+		new_theme="$2"
+		[ "$new_theme" ] || exit 0
+		[ -d "$themes/$new_theme" ] || exit 0
+		echo -n "Enabling fbs theme: $new_theme"
+		set_theme; status ;;
+		
+	pack-theme)
+		# Pack a theme into .tar.gz
+		theme="$2"
+		tmp=fbs-theme-$theme
+		if [ ! -d "$themes/$theme" ]; then
+			echo "No theme found in: $themes/$theme"; exit 0
+		fi
+		echo -n "Creating fbs theme archive: $theme"
+		mkdir -p $tmp
+		cp -r $themes/$theme $tmp
+		cat > $tmp/README << EOT
+Fbs theme - Framebuffer Splash boot artwork
+$(separator)
+
+
+This is a Busybox fbsplash theme created by $USER. To use it you can copy
+files manually to $themes or use 'fbs add-theme'
+
+
+$(separator)
+EOT
+		busybox tar czf fbs-theme-$theme.tar.gz $tmp
+		rm -rf $tmp; status ;;
+		
+	add-theme)
+		check_root
+		file=$2
+		if [ ! -f "$file" ]; then
+			echo "Missing theme archive: $file"; exit 0
+		fi
+		echo -n "Installing fbs theme: ${file%.tar.gz}"
+		tar xzf $file -C /tmp
+		rm /tmp/fbs-theme-*/README
+		cp -r /tmp/fbs-*/* ${themes}
+		status ;;
+		
+	start) start_fbsplash ;;
+	
+	*) usage ;;
+	
+esac
+exit 0
