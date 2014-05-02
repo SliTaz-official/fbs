@@ -67,6 +67,8 @@ Code example
 #!/bin/sh
 #
 export fifo=/tmp/fbs.fifo
+rm -f $fifo; mkfifo $fifo
+
 fbsplash -c -f ${fifo} \
 	-s /usr/share/fbs/default/fbsplash.ppm.gz \
 	-i /usr/share/fbs/default/fbsplash.cfg &
