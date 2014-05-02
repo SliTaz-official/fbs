@@ -46,7 +46,7 @@ Let's test the environment, first make sure you have the Linux Framebuffer
 device node with: 'ls /dev/fb0'. The Raspberry Pi uses the Linux framebuffer
 so Fbs will work out of the box.
 
-Then press Ctrl+F2 to open a text mode session (back to X with Ctrl+F7)
+Then press Ctrl+Alt+F2 to open a text mode session (back to X with Alt+F7)
 and run as root the Fbs testsuite:
 
 # fbs test
@@ -67,10 +67,10 @@ Code example
 #!/bin/sh
 #
 export fifo=/tmp/fbs.fifo
-fbsplash -c -f ${fifo}
-	-s /usr/share/fbs/default/fbsplash.ppm \
-	-i /usrshare/fbs/default/fbsplash.cfg &
- 
+fbsplash -c -f ${fifo} \
+	-s /usr/share/fbs/default/fbsplash.ppm.gz \
+	-i /usr/share/fbs/default/fbsplash.cfg &
+
 echo 25 > ${fifo}
 sleep 1
 echo 50 > ${fifo}
@@ -78,5 +78,5 @@ sleep 1
 echo 75 > ${fifo}
 sleep 1
 echo "exit" > ${fifo}
- 
+
 ===============================================================================
