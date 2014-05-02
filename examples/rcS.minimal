@@ -1,0 +1,125 @@
+#!/bin/sh
+#
+# /etc/init.d/rcS : Initial boot script for SliTaz
+# Config file is  : /etc/rcS.conf
+#
+# rcS is the main initialization script used to check fs, mount, clean,
+# run scripts and start daemons. This is a custom script for ARM to get
+# a faster boot and skip things like handling cdrom.
+#
+# Copyright (C) 2012-2014 SliTaz - BSD License
+#
+. /lib/libtaz.sh
+. /etc/rcS.conf
+. /etc/fbs.conf
+
+# Set default path
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+# Framebuffer Boot Splash
+if [ "$FBSPLASH" == "on" ]; then
+	clear && usleep 250000
+	fifo="/fbs.fifo" && fbs start
+	echo "0" > ${fifo} && usleep 500000
+fi
+
+echo $(colorize 34 "Processing: /etc/init.d/rcS")
+
+# Mount all from: /etc/fstab
+echo "Mounting filesystems in fstab..."
+mkdir -p /dev/pts /dev/shm
+mount -a
+
+[ "$fifo" ] && echo "10" > ${fifo} && usleep 500000
+
+# Mount /run as tmpfs so runtime data are not written to disk
+echo "Mounting tmpfs filesystem on: /run"
+mount -t tmpfs tmpfs /run
+mount --bind /run /var/run
+
+# Store boot messages to log files
+log="/var/log/boot.log"
+dmesg > /var/log/dmesg.log &
+
+# Be quiet at boot
+echo "0 0 0 0" > /proc/sys/kernel/printk
+
+[ "$fifo" ] && echo "20" > ${fifo}
+
+# Use udev and disable hotplug helper (udevd listen to netlink)
+if [ -x "/sbin/udevd" ]; then
+	echo "" > /proc/sys/kernel/hotplug
+	echo "Starting udev daemon..."
+	udevd --daemon 2>/dev/null
+	udevadm trigger
+	udevadm settle --timeout=120
+else
+	# Fallback to Busybox mdev
+	echo -n "Creating device nodes: /sbin/mdev -s"
+	echo "/sbin/mdev" > /proc/sys/kernel/hotplug
+	mdev -s; status
+fi
+
+[ "$fifo" ] && echo "30" > ${fifo}
+
+# Clean up /tmp
+echo -n "Cleaning up temporary files:  /tmp"
+rm -rf /tmp && mkdir /tmp && chmod 1777 /tmp
+status
+
+[ "$fifo" ] && echo "40" > ${fifo}
+
+# Start syslogd and klogd
+echo -n "Starting system log daemons: syslogd/klogd..."
+syslogd -s ${SYSLOGD_SIZE} && klogd
+status
+
+[ "$fifo" ] && echo "50" > ${fifo}
+
+# Load all modules from config file
+if [ "$LOAD_MODULES" ]; then
+	colorize 33 "Loading Kernel modules..."
+	for mod in ${LOAD_MODULES}; do
+		modprobe -v $mod | tee -a ${log}
+	done
+fi
+
+[ "$fifo" ] && echo "60" > ${fifo}
+
+# Start all init scripts
+for script in ${RUN_SCRIPTS}; do
+	colorize 34 "Processing: /etc/init.d/$script"
+	/etc/init.d/$script | tee -a ${log}
+done
+
+[ "$fifo" ] && echo "70" > ${fifo}
+
+# Start all daemons
+if [ "$RUN_DAEMONS" ]; then
+	colorize 33 "Starting all daemons..."
+	for daemon in ${RUN_DAEMONS}; do
+		/etc/init.d/$daemon start
+	done
+fi
+
+[ "$fifo" ] && echo "80" > ${fifo}
+
+# Start X session
+if [ -x "/etc/init.d/$LOGIN_MANAGER" ]; then
+	colorize 36 "Starting X environment..."
+	/etc/init.d/$LOGIN_MANAGER start >/dev/null &
+fi
+
+[ "$fifo" ] && echo "90" > ${fifo}
+
+newline
+colorize 32 "$MESSAGE"
+
+# Exit fbs
+if [ "$fifo" ]; then
+	echo "100" > ${fifo} && sleep 1
+	sleep 1 && echo "exit" > ${fifo} && rm -f ${fifo}
+fi
+
+# Back to a verbose mode but wait to finish with a clean boot
+(sleep 4; echo "7 4 1 7" > /proc/sys/kernel/printk) &
