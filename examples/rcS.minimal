@@ -17,7 +17,7 @@
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 # Framebuffer Boot Splash
-if [ "$FBSPLASH" == "on" ]; then
+if [ "$FBSPLASH" = "on" ]; then
 	clear && usleep 250000
 	fifo="/fbs.fifo" && fbs start
 	echo "0" > ${fifo} && usleep 500000
